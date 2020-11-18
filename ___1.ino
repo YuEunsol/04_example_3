@@ -6,23 +6,24 @@
 #define PIN_IR A0
 
 // configurable parameters
-#define INTERVAL 25 // sampling interval (unit: ms)
-#define _DUTY_MIN 1000 // servo full clockwise position (0 degree)
+#define INTERVAL 20 // sampling interval (unit: ms)
+#define _DUTY_MIN 1550 // servo full clockwise position (0 degree)
 #define _DUTY_NEU 1600 // servo neutral position (90 degree)
-#define _DUTY_MAX 2050 // servo full counterclockwise position (180 degree)
+#define _DUTY_MAX 2000 // servo full counterclockwise position (180 degree)
+
+#define _DIST_MIN 100 // minimum distance to be measured (unit: mm)
+#define _DIST_MAX 450 // maximum distance to be measured (unit: mm)
 
 // global variables
-float timeout; // unit: us
-float dist_min, dist_max, dist_raw, dist_prev; // unit: mm
-float scale; // used for pulse duration to distance conversion
-float dist_ema;
-float dist_rail;
+float dist_min, dist_max, dist_raw, dist_rail; // unit: mm
+unsigned long last_sampling_time; // unit: ms
 float ir_distance(void) { // return value unit: mm
   float val;
   float volt = float(analogRead(PIN_IR));
   val = ((6762.0 / (volt - 9.0)) - 4.0) * 10.0;
   return val;
   }
+float dist_ema;
 Servo myservo;
 
 
@@ -32,35 +33,28 @@ void setup() {
   pinMode(PIN_IR,INPUT);
   myservo.attach(PIN_SERVO); 
   myservo.writeMicroseconds(_DUTY_NEU);
-
-// initialize USS related variables
-  timeout = (INTERVAL / 2) * 1000.0; // precalculate pulseIn() timeout value. (unit: us)
-  dist_raw = dist_prev = 0.0; // raw distance output from USS (unit: mm)
-//  scale = 0.001 * 0.5 * SND_VEL;
+  dist_min = _DIST_MIN; 
+  dist_max = _DIST_MAX;
+  dist_raw = 0.0;
   dist_ema = dist_raw;
-
 // initialize serial port
   Serial.begin(57600);
-
-
-
-
+  last_sampling_time = 0;
 }
 
+
 void loop() {
-// wait until next sampling time. 
-// millis() returns the number of milliseconds since the program started. Will overflow after 50 days.
-//  if(millis() < last_sampling_time + INTERVAL) return;
-
-// get a distance reading from the USS
+  if(millis() < last_sampling_time + INTERVAL) return;  
   dist_raw = ir_distance();
-  dist_rail = dist_raw + 70.0;
+  dist_ema = 0.3*dist_raw + 0.7*dist_ema;
   
-  dist_ema = 0.2*dist_raw + 0.8*dist_ema;
+  dist_rail = dist_ema - 70.0;
 
+
+  
 // output the read value to the serial port
   Serial.print("Min:100,raw:");
-  Serial.print(dist_raw);
+  Serial.print(ir_distance());
   Serial.print(",ema:");
   Serial.print(dist_ema);
   Serial.print(",servo:");
@@ -70,30 +64,21 @@ void loop() {
 
 
 
-// adjust servo position according to the USS read value
 
 
 
-if(dist_rail < 200.0) {
+  if(0.0 <= dist_rail && dist_rail < 200.0) {
      myservo.writeMicroseconds(_DUTY_MAX);
      analogWrite(PIN_LED, 255);
   }
-  else if(200.0 <= dist_rail < 350.0){
+  else if(200.0 <= dist_rail && dist_rail < 350.0){
      analogWrite(PIN_LED, 0);
-     myservo.writeMicroseconds(2050 - (dist_ema-200.0)*7);
-     delay(40);
+     myservo.writeMicroseconds(2000 - (dist_ema-200.0)*3);
+  }
+  else if(350.0 <= dist_rail && dist_rail <= 450.0){
+     myservo.writeMicroseconds(_DUTY_MIN);
+     analogWrite(PIN_LED, 255);
   }
 
-  else if(350.0 <= dist_rail){
-    myservo.writeMicroseconds(_DUTY_MIN);
-    analogWrite(PIN_LED, 255);
-  }
+  last_sampling_time += INTERVAL;
 }
-
-
-//if(dist_rail < 255.0) {
-//    myservo.writeMicroseconds(_DUTY_MAX);
-//  }
-//  else {
-//    myservo.writeMicroseconds(_DUTY_MIN);
-//  }
