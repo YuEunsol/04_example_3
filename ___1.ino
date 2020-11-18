@@ -7,9 +7,9 @@
 
 // configurable parameters
 #define INTERVAL 25 // sampling interval (unit: ms)
-#define _DUTY_MIN 1200 // servo full clockwise position (0 degree)
-#define _DUTY_NEU 1480 // servo neutral position (90 degree)
-#define _DUTY_MAX 1800 // servo full counterclockwise position (180 degree)
+#define _DUTY_MIN 1000 // servo full clockwise position (0 degree)
+#define _DUTY_NEU 1600 // servo neutral position (90 degree)
+#define _DUTY_MAX 2050 // servo full counterclockwise position (180 degree)
 
 // global variables
 float timeout; // unit: us
@@ -17,6 +17,12 @@ float dist_min, dist_max, dist_raw, dist_prev; // unit: mm
 float scale; // used for pulse duration to distance conversion
 float dist_ema;
 float dist_rail;
+float ir_distance(void) { // return value unit: mm
+  float val;
+  float volt = float(analogRead(PIN_IR));
+  val = ((6762.0 / (volt - 9.0)) - 4.0) * 10.0;
+  return val;
+  }
 Servo myservo;
 
 
@@ -38,17 +44,13 @@ void setup() {
 
 
 
-float ir_distance(void) { // return value unit: mm
-  float val;
-  float volt = float(analogRead(PIN_IR));
-  val = ((6762.0 / (volt - 9.0)) - 4.0) * 10.0;
-  return val;
+
 }
 
 void loop() {
 // wait until next sampling time. 
 // millis() returns the number of milliseconds since the program started. Will overflow after 50 days.
-  if(millis() < last_sampling_time + INTERVAL) return;
+//  if(millis() < last_sampling_time + INTERVAL) return;
 
 // get a distance reading from the USS
   dist_raw = ir_distance();
@@ -64,6 +66,7 @@ void loop() {
   Serial.print(",servo:");
   Serial.print(myservo.read());
   Serial.println(",Max:400");
+  Serial.println(dist_rail);
 
 
 
@@ -75,19 +78,18 @@ if(dist_rail < 200.0) {
      myservo.writeMicroseconds(_DUTY_MAX);
      analogWrite(PIN_LED, 255);
   }
-  else if(200.0 <= dist_rail < 300.0){
+  else if(200.0 <= dist_rail < 350.0){
      analogWrite(PIN_LED, 0);
-     myservo.writeMicroseconds(1800 - (dist_ema - 100.0)*2);
-     delay(20);
+     myservo.writeMicroseconds(2050 - (dist_ema-200.0)*7);
+     delay(40);
   }
 
-  else {
+  else if(350.0 <= dist_rail){
     myservo.writeMicroseconds(_DUTY_MIN);
     analogWrite(PIN_LED, 255);
   }
+}
 
-}
-}
 
 //if(dist_rail < 255.0) {
 //    myservo.writeMicroseconds(_DUTY_MAX);
